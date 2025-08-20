@@ -1,57 +1,52 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { Client, Collection, GatewayIntentBits } = require("discord.js");
-const { loadFFmpeg } = require("./utils/ffmpeg");
+
 require("dotenv").config();
 
-(async () => {
-  // Load FFmpeg before starting bot
-  await loadFFmpeg();
+const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
-  const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+client.commands = new Collection();
+const foldersPath = path.join(__dirname, "commands");
+const commandFolders = fs.readdirSync(foldersPath);
 
-  client.commands = new Collection();
-  const foldersPath = path.join(__dirname, "commands");
-  const commandFolders = fs.readdirSync(foldersPath);
-
-  for (const folder of commandFolders) {
-    const commandsPath = path.join(foldersPath, folder);
-    const commandFiles = fs
-      .readdirSync(commandsPath)
-      .filter((file) => file.endsWith(".js") || file.endsWith(".cjs"));
-    for (const file of commandFiles) {
-      const filePath = path.join(commandsPath, file);
-      const command = require(filePath);
-      if ("data" in command && "execute" in command) {
-        client.commands.set(command.data.name, command);
-      } else {
-        console.log(
-          `[WARNING] The command at ${filePath} is missing a required "data" or "execute" property.`
-        );
-      }
-    }
-  }
-
-  const eventsPath = path.join(__dirname, "events");
-  const eventFiles = fs
-    .readdirSync(eventsPath)
-    .filter((file) => file.endsWith(".js"));
-
-  for (const file of eventFiles) {
-    const filePath = path.join(eventsPath, file);
-    const event = require(filePath);
-    if (event.once) {
-      client.once(event.name, (...args) => event.execute(...args));
+for (const folder of commandFolders) {
+  const commandsPath = path.join(foldersPath, folder);
+  const commandFiles = fs
+    .readdirSync(commandsPath)
+    .filter((file) => file.endsWith(".js") || file.endsWith(".cjs"));
+  for (const file of commandFiles) {
+    const filePath = path.join(commandsPath, file);
+    const command = require(filePath);
+    if ("data" in command && "execute" in command) {
+      client.commands.set(command.data.name, command);
     } else {
-      client.on(event.name, (...args) => event.execute(...args));
+      console.log(
+        `[WARNING] The command at ${filePath} is missing a required "data" or "execute" property.`
+      );
     }
   }
+}
 
-  // Login to Discord with bot's token
-  client.login(process.env.BOT_TOKEN);
+const eventsPath = path.join(__dirname, "events");
+const eventFiles = fs
+  .readdirSync(eventsPath)
+  .filter((file) => file.endsWith(".js"));
 
-  const express = require("express");
-  const app = express();
-  app.get("/", (req, res) => res.send("Bot is awake!"));
-  app.listen(process.env.PORT || 3000, () => console.log("Server running"));
-})();
+for (const file of eventFiles) {
+  const filePath = path.join(eventsPath, file);
+  const event = require(filePath);
+  if (event.once) {
+    client.once(event.name, (...args) => event.execute(...args));
+  } else {
+    client.on(event.name, (...args) => event.execute(...args));
+  }
+}
+
+// Login to Discord with bot's token
+client.login(process.env.BOT_TOKEN);
+
+const express = require("express");
+const app = express();
+app.get("/", (req, res) => res.send("Bot is awake!"));
+app.listen(process.env.PORT || 3000, () => console.log("Server running"));

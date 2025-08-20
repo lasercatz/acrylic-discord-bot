@@ -11,7 +11,6 @@ A Discord bot for interacting with Acrylic AI models on Hugging Face. [Link](htt
 ## Features
 
 - Generate paintings from images and output painting processes as GIF files
-- Use FFmpeg for media processing (download modules automatically if missing)
 - Interact via Discord slash commands
 - Use an Express server to keep the bot online, combined with an uptime service
 
@@ -36,6 +35,7 @@ cd acrylic-discord-bot
 ```bash
 npm install
 ```
+This bot also requires FFmpeg to be installed on your system for media processing. Make sure FFmpeg is installed and accessible via your system PATH before running the bot.
 
 4. Create a .env file in the root directory with your credentials:
 

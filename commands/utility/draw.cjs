@@ -9,8 +9,21 @@ const path = require("path");
 const fs = require("fs");
 
 const ffmpeg = require("fluent-ffmpeg");
+const which = require("which");
 
+try {
+  const ffmpegPath = which.sync("ffmpeg");   // finds ffmpeg in PATH
+  const ffprobePath = which.sync("ffprobe"); // finds ffprobe in PATH
 
+  ffmpeg.setFfmpegPath(ffmpegPath);
+  ffmpeg.setFfprobePath(ffprobePath);
+
+  console.log("FFmpeg path:", ffmpegPath);
+  console.log("FFprobe path:", ffprobePath);
+} catch (err) {
+  console.error("FFmpeg or FFprobe not found. Please install system ffmpeg.");
+  process.exit(1);
+}
 
 module.exports = {
   data: new SlashCommandBuilder()
