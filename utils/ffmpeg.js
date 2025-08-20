@@ -1,7 +1,9 @@
 const fs = require("fs");
 const path = require("path");
-const unzipper = require("unzipper");
 const ffmpeg = require("fluent-ffmpeg");
+const unzipper = require("unzipper");
+const tar = require("tar");
+const https = require("https");
 
 const binDir = path.join(__dirname, "../bin");
 if (!fs.existsSync(binDir)) fs.mkdirSync(binDir);
@@ -19,22 +21,35 @@ function findFFmpegRecursive(dir) {
       const result = findFFmpegRecursive(fullPath);
       if (result) return result;
     } else {
-      if (
+      const isFfmpeg =
         (process.platform === "win32" && entry.name === "ffmpeg.exe") ||
-        (process.platform !== "win32" && entry.name === "ffmpeg")
-      ) {
-        const ffmpegPath = fullPath;
-        const ffprobePath = path.join(
+        (process.platform !== "win32" && entry.name === "ffmpeg");
+
+      if (isFfmpeg) {
+        const probePath = path.join(
           path.dirname(fullPath),
           process.platform === "win32" ? "ffprobe.exe" : "ffprobe"
         );
-        if (fs.existsSync(ffprobePath)) {
-          return { ffmpegPath, ffprobePath };
+        if (fs.existsSync(probePath)) {
+          return { ffmpegPath: fullPath, ffprobePath: probePath };
         }
       }
     }
   }
   return null;
+}
+
+function downloadFile(url, dest) {
+  return new Promise((resolve, reject) => {
+    const file = fs.createWriteStream(dest);
+    https.get(url, (res) => {
+      res.pipe(file);
+      file.on("finish", () => file.close(resolve));
+    }).on("error", (err) => {
+      fs.unlinkSync(dest);
+      reject(err);
+    });
+  });
 }
 
 async function loadFFmpeg() {
@@ -49,9 +64,10 @@ async function loadFFmpeg() {
   }
 
   console.log("Downloading FFmpeg...");
-  if (!fs.existsSync(binDir)) fs.mkdirSync(binDir);
 
   let url;
+  let isZip = true;
+
   if (process.platform === "win32") {
     url = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip";
   } else if (process.platform === "darwin") {
@@ -59,33 +75,32 @@ async function loadFFmpeg() {
   } else {
     url =
       "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz";
+    isZip = false;
   }
 
-  const res = await fetch(url);
-  const arrayBuffer = await res.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
+  const archivePath = path.join(binDir, isZip ? "ffmpeg.zip" : "ffmpeg.tar.xz");
+  await downloadFile(url, archivePath);
 
-  const zipPath = path.join(binDir, "ffmpeg.zip");
-  fs.writeFileSync(zipPath, buffer);
+  if (isZip) {
+    await fs.createReadStream(archivePath).pipe(unzipper.Extract({ path: binDir })).promise();
+  } else {
+    await tar.x({ file: archivePath, C: binDir });
+  }
 
-  await fs
-    .createReadStream(zipPath)
-    .pipe(unzipper.Extract({ path: binDir }))
-    .promise();
-
-  fs.unlinkSync(zipPath);
-  console.log("FFmpeg extracted");
+  fs.unlinkSync(archivePath);
 
   const paths = findFFmpegRecursive(binDir);
-  if (!paths) throw new Error("FFmpeg binaries not found!");
+  if (!paths) throw new Error("FFmpeg binaries not found after extraction!");
+
   ffmpegPath = paths.ffmpegPath;
   ffprobePath = paths.ffprobePath;
 
   ffmpeg.setFfmpegPath(ffmpegPath);
   ffmpeg.setFfprobePath(ffprobePath);
 
-  console.log(`FFmpeg path: ${ffmpegPath}`);
-  console.log(`FFprobe path: ${ffprobePath}`);
+  console.log("FFmpeg ready!");
+  console.log("ffmpeg:", ffmpegPath);
+  console.log("ffprobe:", ffprobePath);
 }
 
 module.exports = { loadFFmpeg };
