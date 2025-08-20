@@ -2,7 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const ffmpeg = require("fluent-ffmpeg");
 const unzipper = require("unzipper");
-const tar = require("tar");
+const { exec } = require("child_process");
 const https = require("https");
 
 const binDir = path.join(__dirname, "../bin");
@@ -11,6 +11,7 @@ if (!fs.existsSync(binDir)) fs.mkdirSync(binDir);
 let ffmpegPath;
 let ffprobePath;
 
+// Recursive search for ffmpeg/ffprobe
 function findFFmpegRecursive(dir) {
   const entries = fs.readdirSync(dir, { withFileTypes: true });
 
@@ -39,6 +40,7 @@ function findFFmpegRecursive(dir) {
   return null;
 }
 
+// Download file via HTTPS
 function downloadFile(url, dest) {
   return new Promise((resolve, reject) => {
     const file = fs.createWriteStream(dest);
@@ -66,6 +68,7 @@ async function loadFFmpeg() {
   console.log("Downloading FFmpeg...");
 
   let url;
+  let archivePath;
   let isZip = true;
 
   if (process.platform === "win32") {
@@ -73,18 +76,22 @@ async function loadFFmpeg() {
   } else if (process.platform === "darwin") {
     url = "https://evermeet.cx/ffmpeg/ffmpeg-6.0.zip";
   } else {
-    url =
-      "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz";
+    url = "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz";
     isZip = false;
   }
 
-  const archivePath = path.join(binDir, isZip ? "ffmpeg.zip" : "ffmpeg.tar.xz");
+  archivePath = path.join(binDir, isZip ? "ffmpeg.zip" : "ffmpeg.tar.xz");
   await downloadFile(url, archivePath);
 
   if (isZip) {
     await fs.createReadStream(archivePath).pipe(unzipper.Extract({ path: binDir })).promise();
   } else {
-    await tar.x({ file: archivePath, C: binDir });
+    await new Promise((resolve, reject) => {
+      exec(`tar -xJf "${archivePath}" -C "${binDir}"`, (err, stdout, stderr) => {
+        if (err) return reject(err);
+        resolve();
+      });
+    });
   }
 
   fs.unlinkSync(archivePath);
